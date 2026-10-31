@@ -106,6 +106,18 @@
     .stat span { font-size: 11px; color: var(--muted); }
     .stat:first-child strong { color: var(--green); }
     .stat:nth-child(2) strong { color: var(--red); }
+    .review { margin-bottom: 23px; border: 1px solid var(--line); border-radius: 10px; text-align: left; }
+    .review summary { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 14px; cursor: pointer; font-size: 14px; font-weight: 700; }
+    .review summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+    .review-count { color: var(--muted); font-size: 12px; font-weight: 500; white-space: nowrap; }
+    .review-list { margin: 0; padding: 0 14px 14px 36px; }
+    .review-item { padding: 12px 0; border-top: 1px solid var(--line); }
+    .review-item h3 { margin: 0 0 8px; font-size: 14px; line-height: 1.5; }
+    .review-item p { margin: 4px 0 0; font-size: 13px; }
+    .review-selected strong { color: var(--red); }
+    .review-correct strong { color: var(--green); }
+    .review-explanation { color: var(--muted); }
+    .review-empty { margin: 0 0 23px; padding: 12px 14px; border-radius: 10px; background: var(--green-bg); color: var(--green); font-size: 14px; font-weight: 650; }
     .confetti { position: absolute; top: -12px; width: 7px; height: 11px; background: var(--confetti-color); left: var(--x); animation: fall 2.4s var(--delay) ease-in forwards; pointer-events: none; }
     .enter { animation: appear .35s ease; }
     @keyframes float { 50% { transform: translateY(-7px) rotate(3deg); } }
@@ -201,6 +213,11 @@
         <div class="stat"><strong id="wrong-count"></strong><span>놓친 문제</span></div>
         <div class="stat"><strong id="accuracy"></strong><span>정답률</span></div>
       </div>
+      <details class="review" id="review" hidden>
+        <summary>틀린 문제 복습 <span class="review-count" id="review-count"></span></summary>
+        <ol class="review-list" id="review-list"></ol>
+      </details>
+      <p class="review-empty" id="review-empty" hidden>모든 문제를 맞혔어요! 완벽한 탐사예요.</p>
       <button class="next" id="restart"><span>다시 탐사하기</span><span aria-hidden="true">↻</span></button>
     </section>
     <p class="hint" id="hint">정답을 고르면 우주 이야기가 펼쳐져요 <span aria-hidden="true">·</span> <kbd>1</kbd>–<kbd>4</kbd> 선택</p>
@@ -223,6 +240,7 @@
     let current = 0;
     let correct = 0;
     let answered = false;
+    const selectedAnswers = Array(questions.length).fill(null);
     const progress = document.querySelector(".progress");
 
     function updateProgress(count) {
@@ -269,6 +287,7 @@
       const moveFocus = $("options").contains(document.activeElement);
       answered = true;
       const item = questions[current];
+      selectedAnswers[current] = index;
       const isCorrect = index === item.answer;
       if (isCorrect) correct++;
       $("score").textContent = correct * 10;
@@ -320,6 +339,39 @@
       $("correct-count").textContent = `${correct}개`;
       $("wrong-count").textContent = `${questions.length - correct}개`;
       $("accuracy").textContent = `${correct * 10}%`;
+      const wrongAnswers = questions
+        .map((item, index) => ({ item, selected: selectedAnswers[index], number: index + 1 }))
+        .filter(({ item, selected }) => selected !== item.answer);
+      const review = $("review");
+      const reviewList = $("review-list");
+      reviewList.replaceChildren();
+      review.open = false;
+      review.hidden = wrongAnswers.length === 0;
+      $("review-empty").hidden = wrongAnswers.length !== 0;
+      $("review-count").textContent = `${wrongAnswers.length}문항`;
+      wrongAnswers.forEach(({ item, selected, number }) => {
+        const entry = document.createElement("li");
+        entry.className = "review-item";
+        const heading = document.createElement("h3");
+        heading.textContent = `${String(number).padStart(2, "0")}. ${item.question}`;
+        const selectedAnswer = document.createElement("p");
+        selectedAnswer.className = "review-selected";
+        const selectedLabel = document.createElement("strong");
+        selectedLabel.textContent = "내가 고른 답: ";
+        selectedAnswer.append(selectedLabel, document.createTextNode(item.options[selected]));
+        const correctAnswer = document.createElement("p");
+        correctAnswer.className = "review-correct";
+        const correctLabel = document.createElement("strong");
+        correctLabel.textContent = "정답: ";
+        correctAnswer.append(correctLabel, document.createTextNode(item.options[item.answer]));
+        const explanation = document.createElement("p");
+        explanation.className = "review-explanation";
+        const explanationLabel = document.createElement("strong");
+        explanationLabel.textContent = "해설: ";
+        explanation.append(explanationLabel, document.createTextNode(item.explanation));
+        entry.append(heading, selectedAnswer, correctAnswer, explanation);
+        reviewList.append(entry);
+      });
       if (correct >= 7) {
         for (let i = 0; i < 24; i++) {
           const piece = document.createElement("span");
@@ -342,8 +394,12 @@
     $("restart").addEventListener("click", () => {
       current = 0;
       correct = 0;
+      selectedAnswers.fill(null);
       $("score").textContent = "0";
       $("results").hidden = true;
+      $("review").hidden = true;
+      $("review-empty").hidden = true;
+      $("review-list").replaceChildren();
       $("results").querySelectorAll(".confetti").forEach(piece => piece.remove());
       $("quiz").hidden = false;
       $("hint").hidden = false;
